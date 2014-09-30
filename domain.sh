@@ -161,6 +161,8 @@ server {
         index index.php index.html index.htm;
         error_page 404 /404.html;
 
+        include /etc/nginx/hhvm.conf;
+
         location / {
             try_files \$uri \$uri/ /index.php?\$args;
         }
@@ -219,6 +221,8 @@ server {
         ssl_protocols SSLv2 SSLv3 TLSv1;
         ssl_ciphers HIGH:!aNULL:!MD5;
         ssl_prefer_server_ciphers on;
+
+        include /etc/nginx/hhvm.conf;
 
         location / {
             try_files \$uri \$uri/ /index.php?\$args;
@@ -566,7 +570,8 @@ add)
     fi
 
     add_domain
-    php_fpm_add_user
+    #php_fpm_add_user
+    # TODO: hhvm_add_user if needed!
     reload_webserver
     echo -e "\033[35;1mSuccesfully added \"${DOMAIN}\" to user \"${DOMAIN_OWNER}\" \033[0m"
     echo -e "\033[35;1mYou can now upload your site to $DOMAIN_PATH/public_html.\033[0m"

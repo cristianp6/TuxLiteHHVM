@@ -1,6 +1,6 @@
 ###############################################################################################
 # TuxLite - Complete LNMP/LAMP setup script for Debian/Ubuntu                                 #
-# Nginx/Apache + PHP5-FPM + MySQL                                                             #
+# Nginx/Apache + HHVM + MySQL                                                                 #
 # Stack is optimized/tuned for a 256MB server                                                 #
 # Email your questions to s@tuxlite.com                                                       #
 ###############################################################################################
@@ -58,6 +58,8 @@ function setup_apt {
 
     # If user enables apt option in options.conf
     if [ $CONFIGURE_APT = "yes" ]; then
+        wget -O - http://dl.hhvm.com/conf/hhvm.gpg.key | apt-key add -
+
         cp /etc/apt/{sources.list,sources.list.bak}
 
         if [ $DISTRO = "Debian" ]; then
@@ -70,6 +72,8 @@ deb-src http://http.debian.net/debian $RELEASE main non-free contrib
 # Security
 deb http://security.debian.org/ $RELEASE/updates main contrib non-free
 deb-src http://security.debian.org/ $RELEASE/updates main contrib non-free
+# HHVM
+deb http://dl.hhvm.com/debian $RELEASE main
 
 EOF
         fi # End if DISTRO = Debian
@@ -82,12 +86,13 @@ EOF
 # Main repo
 deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE main restricted universe multiverse
 deb-src mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE main restricted universe multiverse
-
 # Security & updates
 deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-updates main restricted universe multiverse
 deb-src mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-updates main restricted universe multiverse
 deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-security main restricted universe multiverse
 deb-src mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-security main restricted universe multiverse
+# HHVM
+deb http://dl.hhvm.com/ubuntu $RELEASE main
 
 EOF
         fi # End if DISTRO = Ubuntu
@@ -104,7 +109,7 @@ EOF
 
     ## Third party mirrors ##
 
-    # Need to add Dotdeb repo for installing PHP5-FPM when using Debian 6.0 (squeeze)
+    # Need to add Dotdeb repo when using Debian 6.0 (squeeze)
     if  [ $DISTRO = "Debian" ] && [ $RELEASE = "squeeze" ]; then
         echo -e "\033[35;1mEnabling DotDeb repo for Debian 6.0 Squeeze. \033[0m"
         cat > /etc/apt/sources.list.d/dotdeb.list <<EOF
@@ -219,6 +224,12 @@ function install_php {
     # Install PHP packages and extensions specified in options.conf
     aptitude -y install $PHP_BASE
     aptitude -y install $PHP_EXTRAS
+    # Run the script to install and configure FastCGI for webserver
+    /usr/share/hhvm/install_fastcgi.sh
+    service hhvm restart
+    restart_webserver
+    # Start hhvm service automatically on ever reboot
+    update-rc.d hhvm defaults
 
 } # End function install_php
 
@@ -317,26 +328,26 @@ function optimize_stack {
         sed -i 's/^[^#]/#&/' /etc/cron.d/awstats
     fi
 
-    service php5-fpm stop
+    service hhvm stop
     php_fpm_conf="/etc/php5/fpm/pool.d/www.conf"
     # Limit FPM processes
-    sed -i 's/^pm.max_children.*/pm.max_children = '${FPM_MAX_CHILDREN}'/' $php_fpm_conf
-    sed -i 's/^pm.start_servers.*/pm.start_servers = '${FPM_START_SERVERS}'/' $php_fpm_conf
-    sed -i 's/^pm.min_spare_servers.*/pm.min_spare_servers = '${FPM_MIN_SPARE_SERVERS}'/' $php_fpm_conf
-    sed -i 's/^pm.max_spare_servers.*/pm.max_spare_servers = '${FPM_MAX_SPARE_SERVERS}'/' $php_fpm_conf
-    sed -i 's/\;pm.max_requests.*/pm.max_requests = '${FPM_MAX_REQUESTS}'/' $php_fpm_conf
+    #sed -i 's/^pm.max_children.*/pm.max_children = '${FPM_MAX_CHILDREN}'/' $php_fpm_conf
+    #sed -i 's/^pm.start_servers.*/pm.start_servers = '${FPM_START_SERVERS}'/' $php_fpm_conf
+    #sed -i 's/^pm.min_spare_servers.*/pm.min_spare_servers = '${FPM_MIN_SPARE_SERVERS}'/' $php_fpm_conf
+    #sed -i 's/^pm.max_spare_servers.*/pm.max_spare_servers = '${FPM_MAX_SPARE_SERVERS}'/' $php_fpm_conf
+    #sed -i 's/\;pm.max_requests.*/pm.max_requests = '${FPM_MAX_REQUESTS}'/' $php_fpm_conf
     # Change to socket connection for better performance
-    sed -i 's/^listen =.*/listen = \/var\/run\/php5-fpm-www-data.sock/' $php_fpm_conf
+    #sed -i 's/^listen =.*/listen = \/var\/run\/php5-fpm-www-data.sock/' $php_fpm_conf
 
     php_ini_dir="/etc/php5/fpm/php.ini"
     # Tweak php.ini based on input in options.conf
-    sed -i 's/^max_execution_time.*/max_execution_time = '${PHP_MAX_EXECUTION_TIME}'/' $php_ini_dir
-    sed -i 's/^memory_limit.*/memory_limit = '${PHP_MEMORY_LIMIT}'/' $php_ini_dir
-    sed -i 's/^max_input_time.*/max_input_time = '${PHP_MAX_INPUT_TIME}'/' $php_ini_dir
-    sed -i 's/^post_max_size.*/post_max_size = '${PHP_POST_MAX_SIZE}'/' $php_ini_dir
-    sed -i 's/^upload_max_filesize.*/upload_max_filesize = '${PHP_UPLOAD_MAX_FILESIZE}'/' $php_ini_dir
-    sed -i 's/^expose_php.*/expose_php = Off/' $php_ini_dir
-    sed -i 's/^disable_functions.*/disable_functions = exec,system,passthru,shell_exec,escapeshellarg,escapeshellcmd,proc_close,proc_open,dl,popen,show_source/' $php_ini_dir
+    #sed -i 's/^max_execution_time.*/max_execution_time = '${PHP_MAX_EXECUTION_TIME}'/' $php_ini_dir
+    #sed -i 's/^memory_limit.*/memory_limit = '${PHP_MEMORY_LIMIT}'/' $php_ini_dir
+    #sed -i 's/^max_input_time.*/max_input_time = '${PHP_MAX_INPUT_TIME}'/' $php_ini_dir
+    #sed -i 's/^post_max_size.*/post_max_size = '${PHP_POST_MAX_SIZE}'/' $php_ini_dir
+    #sed -i 's/^upload_max_filesize.*/upload_max_filesize = '${PHP_UPLOAD_MAX_FILESIZE}'/' $php_ini_dir
+    #sed -i 's/^expose_php.*/expose_php = Off/' $php_ini_dir
+    #sed -i 's/^disable_functions.*/disable_functions = exec,system,passthru,shell_exec,escapeshellarg,escapeshellcmd,proc_close,proc_open,dl,popen,show_source/' $php_ini_dir
 
     # Generating self signed SSL certs for securing phpMyAdmin, script logins etc
     echo -e " "
@@ -383,9 +394,9 @@ function optimize_stack {
 
     restart_webserver
     sleep 2
-    service php5-fpm start
+    service hhvm start
     sleep 2
-    service php5-fpm restart
+    service hhvm restart
     echo -e "\033[35;1m Optimize complete! \033[0m"
 
 } # End function optimize
@@ -615,8 +626,8 @@ install)
     install_extras
     install_postfix
     restart_webserver
-    service php5-fpm restart
-    echo -e "\033[35;1m Webserver + PHP-FPM + MySQL install complete! \033[0m"
+    service hhvm restart
+    echo -e "\033[35;1m Webserver + HHVM + MySQL install complete! \033[0m"
     ;;
 optimize)
     optimize_stack
